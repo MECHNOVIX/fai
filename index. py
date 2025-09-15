@@ -1,0 +1,92 @@
+import requests
+import json
+from tkinter import filedialog, Tk
+
+# --- Your API Keys ---
+HF_API_KEY = "hf_xxx..."  # <-- Replace with your Hugging Face BLIP-2 API key
+OPENAI_API_KEY = "sk-proj-..."  # <-- Replace with your OpenAI API key
+
+# --- Hugging Face BLIP-2 Setup ---
+BLIP2_API_URL = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
+HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
+
+# --- OpenAI Setup ---
+OPENAI_URL = "https://api.openai.com/v1/responses"
+OPENAI_HEADERS = {
+    "Authorization": f"Bearer {OPENAI_API_KEY}",
+    "Content-Type": "application/json"
+}
+
+# --- Ask user to select image ---
+root = Tk()
+root.withdraw()
+print("Select an image file...")
+file_path = filedialog.askopenfilename(
+    title="Select an image",
+    filetypes=[("Image files", "*.jpg *.jpeg *.png *.webp *.bmp *.gif")]
+)
+if not file_path:
+    print("❌ No image selected. Exiting.")
+    exit()
+
+# --- Step 1: Generate image caption using BLIP-2 ---
+print("🔄 Generating caption using BLIP-2...")
+with open(file_path, "rb") as f:
+    response = requests.post(BLIP2_API_URL, headers=HF_HEADERS, data=f)
+
+if response.status_code != 200:
+    print("❌ BLIP-2 error:", response.text)
+    exit()
+
+caption = response.json()[0]["generated_text"]
+print(f"🖼 Caption: {caption}")
+
+# --- Step 2: Ask user for occasion, season, clothes type, height ---
+print("\nPlease choose occasion:")
+occasions = ["Wedding", "Party", "Office", "Casual", "Beach", "Date", "Festival", "Gym", "Interview", "Other"]
+for i, o in enumerate(occasions, 1):
+    print(f"{i}. {o}")
+occasion_choice = occasions[int(input("Enter number: ")) - 1]
+
+print("\nChoose season:")
+seasons = ["Summer", "Winter", "Monsoon", "Autumn", "Spring"]
+for i, s in enumerate(seasons, 1):
+    print(f"{i}. {s}")
+season_choice = seasons[int(input("Enter number: ")) - 1]
+
+clothes_type = input("\nEnter preferred clothes type (e.g., Formal, Casual, Ethnic): ")
+height = input("Enter your height (e.g., 5'9 or 175cm): ")
+
+# --- Step 3: Send everything to OpenAI for recommendation ---
+prompt = f"""
+Image caption: {caption}
+User details:
+- Occasion: {occasion_choice}
+- Season: {season_choice}
+- Clothes type: {clothes_type}
+- Height: {height}
+
+Task: Analyze the caption, infer skin tone, face shape, hairstyle, and body type.
+Then recommend:
+1. Best outfit suggestion for this user
+2. Top 5 colors that suit them
+3. Bottom 5 colors they should avoid
+4. 5 great color combinations for outfits
+5. Style tips for their body type
+"""
+
+print("\n🤖 Asking OpenAI for recommendation...")
+payload = {
+    "model": "gpt-4.1",  # You can change to gpt-4.1-mini to save cost
+    "input": prompt
+}
+
+res = requests.post(OPENAI_URL, headers=OPENAI_HEADERS, data=json.dumps(payload))
+
+if res.status_code != 200:
+    print("❌ OpenAI API error:", res.text)
+    exit()
+
+ai_response = res.json()
+print("\n✅ AI Recommendation:")
+print(ai_response["output"][0]["content"][0]["text"])
